@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Validation Blueprint: HealthProfile
+    function isValidHealthProfile(data, uid) {
+      return data.userId is string
+        && data.userId == uid
+        && data.userId.size() <= 128
+        && data.userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && (!('fullName' in data) || (data.fullName is string && data.fullName.size() <= 120))
+        && data.age is string && data.age.size() <= 20
+        && data.gender in ['male', 'female', 'other', '']
+        && (!('bloodType' in data) || (data.bloodType is string && data.bloodType.size() <= 16))
+        && (!('chronicConditions' in data) || (data.chronicConditions is list && data.chronicConditions.size() <= 40 && (data.chronicConditions.size() == 0 || data.chronicConditions[0] is string)))
+        && (!('currentMedications' in data) || (data.currentMedications is list && data.currentMedications.size() <= 40 && (data.currentMedications.size() == 0 || data.currentMedications[0] is string)))
+        && (!('allergies' in data) || (data.allergies is list && data.allergies.size() <= 40 && (data.allergies.size() == 0 || data.allergies[0] is string)))
+        && (!('pastMedicalHistory' in data) || (data.pastMedicalHistory is string && data.pastMedicalHistory.size() <= 2000))
+        && (!('emergencyContact' in data) || (data.emergencyContact is string && data.emergencyContact.size() <= 120))
+        && data.preferredLanguage in ['ar', 'en']
+        && data.localUpdatedAt is string && data.localUpdatedAt.size() <= 64
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: MedicalReport
+    function isValidMedicalReport(data, reportId) {
+      return data.id is string
+        && data.id == reportId
+        && data.id.size() <= 128
+        && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.userId is string
+        && data.userId == request.auth.uid
+        && data.userId.size() <= 128
+        && data.userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.referenceNumber is string && data.referenceNumber.size() >= 1 && data.referenceNumber.size() <= 64
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.status in ['preliminary', 'partial', 'completed']
+        && data.aiAnalysisStatus in ['complete', 'unavailable', 'pending']
+        && data.language in ['ar', 'en']
+        && (!('patientSnapshot' in data) || data.patientSnapshot is map)
+        && data.collectedData is map
+        && (!('aiAnalysis' in data) || data.aiAnalysis == null || data.aiAnalysis is map)
+        && data.messages is list && data.messages.size() <= 120
+        && (data.messages.size() == 0 || data.messages[0] is map)
+        && (!('progressPercent' in data) || (data.progressPercent is number && data.progressPercent >= 0 && data.progressPercent <= 100))
+        && data.version is number && data.version >= 1
+        && data.localCreatedAt is string && data.localCreatedAt.size() <= 64
+        && data.localUpdatedAt is string && data.localUpdatedAt.size() <= 64
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: UserFeedback
+    function isValidFeedback(data, feedbackId) {
+      return data.id is string
+        && data.id == feedbackId
+        && data.id.size() <= 128
+        && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.userId is string
+        && data.userId == request.auth.uid
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.category in ['accuracy', 'design', 'pdf', 'general']
+        && data.comment is string && data.comment.size() <= 1500
+        && data.localCreatedAt is string && data.localCreatedAt.size() <= 64
+        && data.createdAt is timestamp;
+    }
+
+    // Private Health Profile Collection
+    match /users/{userId}/private/{profileId} {
+      allow get: if isOwner(userId) && isValidId(profileId) && profileId == 'profile';
+      allow list: if false;
+      allow create: if isOwner(userId)
+        && isValidId(profileId)
+        && profileId == 'profile'
+        && incoming().keys().hasAll(['userId', 'age', 'gender', 'preferredLanguage', 'localUpdatedAt', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly([
+          'userId', 'fullName', 'age', 'gender', 'bloodType',
+          'chronicConditions', 'currentMedications', 'allergies',
+          'pastMedicalHistory', 'emergencyContact', 'preferredLanguage',
+          'localUpdatedAt', 'createdAt', 'updatedAt'
+        ])
+        && isValidHealthProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && isValidId(profileId)
+        && profileId == 'profile'
+        && isValidHealthProfile(incoming(), userId)
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'fullName', 'age', 'gender', 'bloodType',
+          'chronicConditions', 'currentMedications', 'allergies',
+          'pastMedicalHistory', 'emergencyContact', 'preferredLanguage',
+          'localUpdatedAt', 'updatedAt'
+        ]);
+      allow delete: if isOwner(userId) && isValidId(profileId) && profileId == 'profile';
+    }
+
+    // Medical Reports Collection
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(reportId)
+        && incoming().keys().hasAll([
+          'id', 'userId', 'referenceNumber', 'title', 'status',
+          'aiAnalysisStatus', 'language', 'collectedData', 'messages',
+          'version', 'localCreatedAt', 'localUpdatedAt', 'createdAt', 'updatedAt'
+        ])
+        && incoming().keys().hasOnly([
+          'id', 'userId', 'referenceNumber', 'title', 'status',
+          'aiAnalysisStatus', 'language', 'patientSnapshot', 'collectedData',
+          'aiAnalysis', 'messages', 'progressPercent', 'version',
+          'localCreatedAt', 'localUpdatedAt', 'createdAt', 'updatedAt'
+        ])
+        && isValidMedicalReport(incoming(), reportId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(reportId)
+        && existing().userId == request.auth.uid
+        && isValidMedicalReport(incoming(), reportId)
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().referenceNumber == existing().referenceNumber
+        && incoming().localCreatedAt == existing().localCreatedAt
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'status', 'aiAnalysisStatus', 'language',
+          'patientSnapshot', 'collectedData', 'aiAnalysis', 'messages',
+          'progressPercent', 'version', 'localUpdatedAt', 'updatedAt'
+        ]);
+      allow delete: if isSignedIn() && isValidId(reportId) && existing().userId == request.auth.uid;
+    }
+
+    // User Feedback Collection
+    match /feedback/{feedbackId} {
+      allow get: if isSignedIn() && isValidId(feedbackId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(feedbackId)
+        && incoming().keys().hasAll(['id', 'userId', 'rating', 'category', 'comment', 'localCreatedAt', 'createdAt'])
+        && incoming().keys().hasOnly(['id', 'userId', 'rating', 'category', 'comment', 'localCreatedAt', 'createdAt'])
+        && isValidFeedback(incoming(), feedbackId)
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(feedbackId) && existing().userId == request.auth.uid;
+    }
+  }
+}

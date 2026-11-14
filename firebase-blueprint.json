@@ -1,0 +1,220 @@
+{
+  "entities": {
+    "HealthProfile": {
+      "title": "HealthProfile",
+      "description": "Private personal health profile belonging to an authenticated user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "fullName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "age": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "gender": {
+          "type": "string",
+          "enum": ["male", "female", "other", ""]
+        },
+        "bloodType": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "chronicConditions": {
+          "type": "array"
+        },
+        "currentMedications": {
+          "type": "array"
+        },
+        "allergies": {
+          "type": "array"
+        },
+        "pastMedicalHistory": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "emergencyContact": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "enum": ["ar", "en"]
+        },
+        "localUpdatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "age",
+        "gender",
+        "preferredLanguage",
+        "localUpdatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MedicalReport": {
+      "title": "MedicalReport",
+      "description": "Persistent clinical assessment report and chat record owned strictly by one user.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "referenceNumber": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "status": {
+          "type": "string",
+          "enum": ["preliminary", "partial", "completed"]
+        },
+        "aiAnalysisStatus": {
+          "type": "string",
+          "enum": ["complete", "unavailable", "pending"]
+        },
+        "language": {
+          "type": "string",
+          "enum": ["ar", "en"]
+        },
+        "patientSnapshot": {
+          "type": "object"
+        },
+        "collectedData": {
+          "type": "object"
+        },
+        "aiAnalysis": {
+          "type": "object"
+        },
+        "messages": {
+          "type": "array"
+        },
+        "progressPercent": {
+          "type": "number"
+        },
+        "version": {
+          "type": "number"
+        },
+        "localCreatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "localUpdatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "referenceNumber",
+        "title",
+        "status",
+        "aiAnalysisStatus",
+        "language",
+        "collectedData",
+        "messages",
+        "version",
+        "localCreatedAt",
+        "localUpdatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserFeedback": {
+      "title": "UserFeedback",
+      "description": "User experience feedback submitted from the feedback center.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "rating": {
+          "type": "number"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["accuracy", "design", "pdf", "general"]
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "localCreatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "rating",
+        "category",
+        "comment",
+        "localCreatedAt",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/private/{profileId}": {
+      "schema": { "$ref": "#/entities/HealthProfile" },
+      "description": "Private personal health profile isolated per authenticated user."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/MedicalReport" },
+      "description": "User-owned medical assessment reports and consultation transcripts."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": { "$ref": "#/entities/UserFeedback" },
+      "description": "User experience ratings and comments."
+    }
+  }
+}

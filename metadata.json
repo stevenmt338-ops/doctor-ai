@@ -1,0 +1,6 @@
+{
+  "name": "DOCTOR AI | دكتور AI",
+  "description": "Your Intelligent Health Assistant — منصة طبية ذكية لإجراء مقابلة صحية منظمة وإنشاء تقرير طبي احترافي دائم بصيغة A4 PDF.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
